@@ -1,3 +1,8 @@
+const API_BASE =
+  window.location.hostname === "localhost"
+    ? "http://localhost:3000"
+    : window.location.origin;
+
 const state = {
   token: localStorage.getItem("demo-token") || "",
   foods: []
@@ -21,14 +26,27 @@ const elements = {
   foodPrice: document.getElementById("foodPrice")
 };
 
+// ===== Utils =====
 function log(message, payload) {
   const timestamp = new Date().toLocaleTimeString();
   const detail = payload ? `\n${JSON.stringify(payload, null, 2)}` : "";
-  elements.logOutput.textContent = `[${timestamp}] ${message}${detail}\n\n${elements.logOutput.textContent}`;
+  elements.logOutput.textContent =
+    `[${timestamp}] ${message}${detail}\n\n${elements.logOutput.textContent}`;
 }
 
+function escapeHTML(str = "") {
+  return str.replace(/[&<>"']/g, (m) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;"
+  }[m]));
+}
+
+// ===== Token =====
 function updateTokenState() {
-  elements.apiBase.textContent = window.location.origin;
+  elements.apiBase.textContent = API_BASE;
   elements.tokenState.textContent = state.token ? "JWT loaded" : "Not logged in";
 }
 
@@ -44,6 +62,7 @@ function saveToken(token) {
   updateTokenState();
 }
 
+// ===== API =====
 async function request(path, options = {}) {
   const headers = {
     "Content-Type": "application/json",
@@ -54,25 +73,38 @@ async function request(path, options = {}) {
     headers.Authorization = `Bearer ${state.token}`;
   }
 
-  const response = await fetch(path, {
-    ...options,
-    headers
-  });
+  let response;
 
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers
+    });
+  } catch (err) {
+    console.error("Fetch error:", err);
+    throw new Error("Network error - server unreachable");
+  }
+
+  // Safe parse
   let data = null;
   try {
-    data = await response.json();
-  } catch (error) {
-    data = null;
+    const text = await response.text();
+    data = text ? JSON.parse(text) : null;
+  } catch (err) {
+    console.warn("Invalid JSON response");
   }
 
   if (!response.ok) {
-    throw new Error((data && data.message) || `Request failed: ${response.status}`);
+    const message =
+      (data && data.message) ||
+      `Request failed: ${response.status} ${response.statusText}`;
+    throw new Error(message);
   }
 
   return data;
 }
 
+// ===== Food UI =====
 function resetFoodForm() {
   elements.foodId.value = "";
   elements.foodName.value = "";
@@ -90,7 +122,7 @@ function populateFoodForm(food) {
 function renderFoods() {
   if (state.foods.length === 0) {
     elements.foodsList.innerHTML =
-      '<div class="food-item"><p>No food records yet. Login and create one.</p></div>';
+      '<div class="food-item"><p>No food records yet.</p></div>';
     return;
   }
 
@@ -99,10 +131,10 @@ function renderFoods() {
       (food) => `
         <article class="food-item">
           <header>
-            <strong>${food.name}</strong>
+            <strong>${escapeHTML(food.name)}</strong>
             <span>$${food.price}</span>
           </header>
-          <p>${food.description || "No description"}</p>
+          <p>${escapeHTML(food.description || "No description")}</p>
           <div class="actions">
             <button type="button" data-action="edit" data-id="${food.id}">Edit</button>
             <button type="button" class="ghost" data-action="delete" data-id="${food.id}">
@@ -115,9 +147,10 @@ function renderFoods() {
     .join("");
 }
 
+// ===== API Actions =====
 async function loadFoods() {
   try {
-    state.foods = await request("/foods", { method: "GET" });
+    state.foods = await request("/foods");
     renderFoods();
     log("Loaded foods", state.foods);
   } catch (error) {
@@ -128,17 +161,16 @@ async function loadFoods() {
 
 async function register() {
   try {
-    const payload = {
-      email: elements.authEmail.value,
-      password: elements.authPassword.value
-    };
     const data = await request("/auth/register", {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        email: elements.authEmail.value,
+        password: elements.authPassword.value
+      })
     });
 
     saveToken(data.token);
-    log("Registered user successfully", data);
+    log("Registered successfully", data);
   } catch (error) {
     log(error.message);
   }
@@ -146,17 +178,16 @@ async function register() {
 
 async function login() {
   try {
-    const payload = {
-      email: elements.authEmail.value,
-      password: elements.authPassword.value
-    };
     const data = await request("/auth/login", {
       method: "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        email: elements.authEmail.value,
+        password: elements.authPassword.value
+      })
     });
 
     saveToken(data.token);
-    log("Logged in successfully", data);
+    log("Login success", data);
     await loadFoods();
   } catch (error) {
     log(error.message);
@@ -166,17 +197,22 @@ async function login() {
 async function saveFood(event) {
   event.preventDefault();
 
+  const price = Number(elements.foodPrice.value);
+  if (isNaN(price) || price < 0) {
+    log("Invalid price");
+    return;
+  }
+
   const foodId = elements.foodId.value;
-  const payload = {
-    name: elements.foodName.value,
-    description: elements.foodDescription.value,
-    price: Number(elements.foodPrice.value || 0)
-  };
 
   try {
     const data = await request(foodId ? `/foods/${foodId}` : "/foods", {
       method: foodId ? "PUT" : "POST",
-      body: JSON.stringify(payload)
+      body: JSON.stringify({
+        name: elements.foodName.value,
+        description: elements.foodDescription.value,
+        price
+      })
     });
 
     log(foodId ? "Updated food" : "Created food", data);
@@ -189,25 +225,21 @@ async function saveFood(event) {
 
 async function deleteFood(id) {
   try {
-    const data = await request(`/foods/${id}`, {
-      method: "DELETE"
-    });
-
-    log(`Deleted food #${id}`, data);
+    await request(`/foods/${id}`, { method: "DELETE" });
+    log(`Deleted food #${id}`);
     await loadFoods();
   } catch (error) {
     log(error.message);
   }
 }
 
+// ===== Metrics =====
 async function checkHealth() {
   try {
-    const data = await request("/health", { method: "GET" });
+    const data = await request("/health");
     elements.healthValue.textContent = data.status;
-    log("Health check complete", data);
-  } catch (error) {
+  } catch {
     elements.healthValue.textContent = "error";
-    log(error.message);
   }
 }
 
@@ -217,8 +249,8 @@ async function runProcess() {
       method: "POST",
       body: JSON.stringify({})
     });
+
     elements.processValue.textContent = `${data.processingTimeMs} ms`;
-    log("Process simulation complete", data);
     await loadMetrics();
   } catch (error) {
     log(error.message);
@@ -227,65 +259,57 @@ async function runProcess() {
 
 async function loadMetrics() {
   try {
-    const data = await request("/metrics", { method: "GET" });
+    const data = await request("/metrics");
     elements.requestsValue.textContent = data.totalRequests;
     elements.avgValue.textContent = `${data.averageResponseTimeMs} ms`;
     elements.uptimeValue.textContent = `${data.uptimeSeconds}s`;
-    log("Loaded metrics", data);
   } catch (error) {
     log(error.message);
   }
 }
 
+// ===== Events =====
 function handleFoodListClick(event) {
   const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
 
-  if (!(target instanceof HTMLElement)) {
-    return;
-  }
+  const { action, id } = target.dataset;
+  if (!action || !id) return;
 
-  const action = target.dataset.action;
-  const id = target.dataset.id;
+  const food = state.foods.find((f) => String(f.id) === id);
+  if (!food) return;
 
-  if (!action || !id) {
-    return;
-  }
-
-  const food = state.foods.find((item) => String(item.id) === id);
-  if (!food) {
-    return;
-  }
-
-  if (action === "edit") {
-    populateFoodForm(food);
-    log(`Loaded food #${id} into form`, food);
-  }
-
-  if (action === "delete") {
-    deleteFood(id);
-  }
+  if (action === "edit") populateFoodForm(food);
+  if (action === "delete") deleteFood(id);
 }
 
 function registerEventListeners() {
-  document.getElementById("registerBtn").addEventListener("click", register);
-  document.getElementById("loginBtn").addEventListener("click", login);
-  document.getElementById("logoutBtn").addEventListener("click", () => {
+  document.getElementById("registerBtn").onclick = register;
+  document.getElementById("loginBtn").onclick = login;
+
+  document.getElementById("logoutBtn").onclick = () => {
     saveToken("");
-    log("Token cleared");
-  });
-  document.getElementById("foodForm").addEventListener("submit", saveFood);
-  document.getElementById("resetFoodBtn").addEventListener("click", resetFoodForm);
-  document.getElementById("refreshFoodsBtn").addEventListener("click", loadFoods);
-  document.getElementById("healthBtn").addEventListener("click", checkHealth);
-  document.getElementById("processBtn").addEventListener("click", runProcess);
-  document.getElementById("metricsBtn").addEventListener("click", loadMetrics);
-  elements.foodsList.addEventListener("click", handleFoodListClick);
+    state.foods = [];
+    renderFoods();
+    log("Logged out");
+  };
+
+  document.getElementById("foodForm").onsubmit = saveFood;
+  document.getElementById("resetFoodBtn").onclick = resetFoodForm;
+  document.getElementById("refreshFoodsBtn").onclick = loadFoods;
+  document.getElementById("healthBtn").onclick = checkHealth;
+  document.getElementById("processBtn").onclick = runProcess;
+  document.getElementById("metricsBtn").onclick = loadMetrics;
+
+  elements.foodsList.onclick = handleFoodListClick;
 }
 
+// ===== Init =====
 async function bootstrap() {
   updateTokenState();
   renderFoods();
   registerEventListeners();
+
   await checkHealth();
   await loadMetrics();
 

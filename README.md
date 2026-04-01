@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # Cloud vs On-Premise Demo App
 
 Minimal demo application for comparing on-premise and cloud deployment using Express, PostgreSQL, and Docker. It includes a lightweight frontend dashboard, JWT authentication, Food CRUD APIs, a health check, a fake processing endpoint for simple performance testing, and basic in-memory metrics.
@@ -117,6 +116,5 @@ curl http://localhost:3000/metrics
 - Push the same codebase to GitHub for team cloud deployment.
 - Use Render as the first cloud target.
 - Run the same checklist in each environment to compare results consistently.
-=======
+
 # demo-cloud-project
->>>>>>> 022e6fc92dc2360e22176fd483f8c7323483615a
