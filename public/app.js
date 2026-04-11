@@ -2,7 +2,7 @@ const API_BASE =
   window.location.hostname === "localhost"
     ? "http://localhost:3000"
     : window.location.origin;
-
+    
 const state = {
   token: localStorage.getItem("demo-token") || "",
   foods: []

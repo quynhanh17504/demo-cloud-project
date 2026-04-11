@@ -1,11 +1,11 @@
 #!/bin/sh
-set -e
 
-host="$DB_HOST"
+echo "⏳ Waiting for PostgreSQL..."
 
-until pg_isready -h "$host" -U "$DB_USER"; do
-  echo "Waiting for PostgreSQL at $host..."
+until pg_isready -h "$DB_HOST" -p 5432 -U "$POSTGRES_USER"; do
   sleep 2
 done
+
+echo "✅ PostgreSQL is ready!"
 
 exec "$@"

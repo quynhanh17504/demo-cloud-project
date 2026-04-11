@@ -5,11 +5,21 @@ const pool = new Pool({
   connectionString: env.databaseUrl
 });
 
+pool.on("connect", () => {
+  console.log("✅ Connected to PostgreSQL");
+});
+
+pool.on("error", (err) => {
+  console.error("❌ DB Error:", err);
+});
+
 let initializationPromise;
 
 async function initializeDatabase() {
   if (!initializationPromise) {
     initializationPromise = (async () => {
+      console.log("⏳ Initializing database...");
+
       await pool.query(`
         CREATE TABLE IF NOT EXISTS users (
           id SERIAL PRIMARY KEY,
@@ -28,6 +38,8 @@ async function initializeDatabase() {
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
       `);
+
+      console.log("✅ Database ready");
     })().catch((error) => {
       initializationPromise = null;
       throw error;
