@@ -13,21 +13,31 @@ app.use(express.json());
 // serve frontend
 app.use(express.static(path.join(__dirname, "../public")));
 
-// routes test
+// ===== ROUTES =====
+
+// nhẹ (baseline)
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
 
-// TODO: routes thật
-// const foodRoutes = require("./routes/food.routes");
-// app.use("/foods", foodRoutes);
+// 🔥 CPU-bound nặng hơn (~300ms)
+app.get("/heavy", (req, res) => {
+  const start = Date.now();
 
+  while (Date.now() - start < 300) {}
+
+  res.json({ status: "heavy ok" });
+});
+
+// ===== START SERVER =====
 async function start() {
   try {
     await initializeDatabase();
 
-    app.listen(env.port, () => {
-      console.log(`🚀 Server running on port ${env.port}`);
+    const PORT = process.env.PORT || env.port;
+
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
     });
   } catch (err) {
     console.error("❌ Failed to start server:", err);
