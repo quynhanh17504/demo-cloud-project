@@ -9,8 +9,9 @@ RUN npm install
 
 COPY . .
 
-COPY wait-for-db.sh /wait-for-db.sh
-RUN chmod +x /wait-for-db.sh
+# ❌ bỏ wait-for-db
+# COPY wait-for-db.sh /wait-for-db.sh
+# RUN chmod +x /wait-for-db.sh
 
-ENTRYPOINT ["/wait-for-db.sh"]
+# ✅ chạy trực tiếp app
 CMD ["node", "src/app.js"]

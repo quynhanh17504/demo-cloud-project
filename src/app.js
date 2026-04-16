@@ -32,7 +32,10 @@ app.get("/heavy", (req, res) => {
 // ===== START SERVER =====
 async function start() {
   try {
-    await initializeDatabase();
+    // ❗ chỉ chạy DB ở local
+    if (process.env.NODE_ENV !== "production") {
+      await initializeDatabase();
+    }
 
     const PORT = process.env.PORT || env.port;
 
